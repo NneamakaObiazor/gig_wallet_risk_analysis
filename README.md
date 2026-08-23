@@ -5,8 +5,6 @@ A full analytics workflow — Python EDA, statistical claim verification, a
 a 50,000-transaction synthetic dataset covering gig-worker digital wallet
 activity across Nigeria, Kenya, Ghana, and South Africa (Jan 2023–Dec 2024).
 
-## TL;DR
-
 The brief that shipped with this dataset proposed six specific fraud/risk
 patterns (channel effects, country concentration, new-account risk, gig
 segment disputes, velocity correlation, month-end spikes). **We tested all
@@ -163,7 +161,7 @@ python scripts/verification_tests.py --data-dir ./data
    up under a normal data refresh.
 
 ---
-*Report generated August 2026. Currency: USD throughout. See
-`report/Analytical_Report.docx` Section 4.4 for a note on the FX-rate
+*Currency: USD throughout. See
+`report/Analytical_Report.pdf` Section 4.4 for a note on the FX-rate
 reference data in `dim_market`, which does not match real-world rates for
 these currencies and should not be used for `amount_local` conversions.*
