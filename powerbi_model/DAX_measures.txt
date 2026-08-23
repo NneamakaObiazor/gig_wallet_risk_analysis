@@ -1,0 +1,187 @@
+================================================================================
+DAX MEASURES LIBRARY — African Gig-Economy & Digital Wallet Risk Model
+================================================================================
+Paste each block into a new measure in Power BI Desktop (Model view > New
+Measure), ideally organized inside a hidden "_Measures" table for tidiness.
+Relationships assumed (all single-direction, dim -> fact, built automatically
+by Power BI's autodetect, or set manually in Model view):
+
+    dim_worker[worker_id]   1 --- * fact_transactions[worker_id]
+    dim_channel[channel_id] 1 --- * fact_transactions[channel_id]
+    dim_market[market_id]   1 --- * fact_transactions[market_id]
+    dim_date[date_id]       1 --- * fact_transactions[date_id]
+
+Mark dim_date as a Date Table (Model view > right-click dim_date > "Mark as
+date table" > full_date column) so time-intelligence functions work.
+
+--------------------------------------------------------------------------------
+CORE VOLUME & VALUE
+--------------------------------------------------------------------------------
+Total Transactions =
+COUNTROWS ( fact_transactions )
+
+Total Value USD =
+SUM ( fact_transactions[amount_usd] )
+
+Avg Transaction Value USD =
+AVERAGE ( fact_transactions[amount_usd] )
+
+--------------------------------------------------------------------------------
+RISK RATES (all return a %, format as 0.0%)
+--------------------------------------------------------------------------------
+Fraud Rate =
+DIVIDE (
+    CALCULATE ( COUNTROWS ( fact_transactions ), fact_transactions[is_fraud_flagged] = TRUE () ),
+    COUNTROWS ( fact_transactions )
+)
+
+Dispute Rate =
+DIVIDE (
+    CALCULATE ( COUNTROWS ( fact_transactions ), fact_transactions[is_disputed] = TRUE () ),
+    COUNTROWS ( fact_transactions )
+)
+
+Reversal Rate =
+DIVIDE (
+    CALCULATE ( COUNTROWS ( fact_transactions ), fact_transactions[is_reversed] = TRUE () ),
+    COUNTROWS ( fact_transactions )
+)
+
+Total Fraud Loss USD =
+SUM ( fact_transactions[fraud_loss_usd] )
+
+Fraud Loss Rate =
+DIVIDE ( [Total Fraud Loss USD], [Total Value USD] )
+
+Avg Loss per Fraud Case =
+DIVIDE (
+    [Total Fraud Loss USD],
+    CALCULATE ( COUNTROWS ( fact_transactions ), fact_transactions[is_fraud_flagged] = TRUE () )
+)
+
+--------------------------------------------------------------------------------
+STATISTICAL GUARDRAILS — use these next to every rate so the report never
+implies a difference is real when it is inside sampling noise.
+--------------------------------------------------------------------------------
+Overall Fraud Rate (Fixed) =
+CALCULATE ( [Fraud Rate], ALL ( fact_transactions ), ALL ( dim_worker ), ALL ( dim_channel ), ALL ( dim_market ), ALL ( dim_date ) )
+-- Use as a constant reference line on every "Fraud Rate by X" chart.
+
+Fraud Rate Std Error =
+VAR p = [Fraud Rate]
+VAR n = COUNTROWS ( fact_transactions )
+RETURN IF ( n > 0, SQRT ( p * ( 1 - p ) / n ), BLANK () )
+
+Fraud Rate CI Lower 95 =
+[Fraud Rate] - 1.96 * [Fraud Rate Std Error]
+
+Fraud Rate CI Upper 95 =
+[Fraud Rate] + 1.96 * [Fraud Rate Std Error]
+
+Is Rate Significantly Different =
+-- Returns "Yes"/"No" flag: does this category's 95% CI exclude the overall mean?
+VAR overall = [Overall Fraud Rate (Fixed)]
+RETURN IF ( overall < [Fraud Rate CI Lower 95] || overall > [Fraud Rate CI Upper 95], "Yes", "No" )
+
+--------------------------------------------------------------------------------
+SEGMENTATION HELPERS
+--------------------------------------------------------------------------------
+Tenure Group =
+SWITCH (
+    TRUE (),
+    dim_worker[account_tenure_days] <= 90, "0-90d (new)",
+    dim_worker[account_tenure_days] <= 365, "91-365d",
+    dim_worker[account_tenure_days] <= 730, "1-2yr",
+    dim_worker[account_tenure_days] <= 1095, "2-3yr",
+    dim_worker[account_tenure_days] <= 1460, "3-4yr",
+    "4-5yr"
+)
+-- Add as a CALCULATED COLUMN on dim_worker (Table tools > New column), not a measure.
+
+Risk Score Band =
+-- Calculated column on dim_worker. Deciles of risk_score (0-100 scale).
+Risk Band = 
+SWITCH(
+    TRUE(),
+    dim_worker[risk_score] <= 25, "Low",
+    dim_worker[risk_score] <= 50, "Moderate",
+    dim_worker[risk_score] <= 75, "High",
+    dim_worker[risk_score] <= 100, "Very High",
+    BLANK()
+)
+
+--------------------------------------------------------------------------------
+ADDITIONAL SEGMENTATION HELPERS — added while building Pages 3–5
+--------------------------------------------------------------------------------
+Risk Score Band =
+-- Calculated column on dim_worker. Deciles of risk_score (0-100 scale).
+Risk Band = 
+SWITCH(
+    TRUE(),
+    dim_worker[risk_score] <= 25, "Low",
+    dim_worker[risk_score] <= 50, "Moderate",
+    dim_worker[risk_score] <= 75, "High",
+    dim_worker[risk_score] <= 100, "Very High",
+    BLANK()
+)
+
+Tenure Sort Order =
+-- Calculated column on dim_worker. Points Tenure Group's "Sort by column" so it
+-- orders chronologically (0-90d ... 4-5yr) instead of alphabetically.
+SWITCH ( dim_worker[Tenure Group],
+    "0-90d (new)", 1, "91-365d", 2, "1-2yr", 3,
+    "2-3yr", 4, "3-4yr", 5, "4-5yr", 6 )
+
+Claims Confirmed =
+-- Static headline stat for the Page 5 "Recommendations & Verifications" page.
+-- Created by dragging columns into a table visual — see note below.
+"0 of 6"
+
+--------------------------------------------------------------------------------
+dim_date.week_number — HOW THIS WAS ACTUALLY FIXED
+--------------------------------------------------------------------------------
+The source file's week_number column was 100% null. Two ways to fix it were
+tested; the Power Query version below is what's implemented in the final file
+because it fixes the defect at the source-query layer rather than the model
+layer, which behaves better across a real data refresh:
+
+  Power Query custom column (Add Column > Custom Column on dim_date):
+
+    = let
+        Thursday = Date.AddDays([full_date], 3 - Date.DayOfWeek([full_date], Day.Monday)),
+        YearStart = #date(Date.Year(Thursday), 1, 1),
+        DaysDiff = Duration.Days(Thursday - YearStart),
+        WeekNum = Number.RoundUp((DaysDiff + 1) / 7)
+      in
+        WeekNum
+
+  Equivalent one-line DAX calculated column, if you'd rather not touch
+  Power Query (produces identical ISO 8601 week numbers):
+
+    week_number = ISOWEEKNUM ( dim_date[full_date] )
+
+Both give true ISO 8601 week numbers (Monday-start, week 1 = the week
+containing the year's first Thursday) — this matters because it's the same
+definition used to compute every date-based figure in Analytical_Report.docx,
+so numbers match regardless of which of the two methods you pick.
+
+--------------------------------------------------------------------------------
+A NOTE ON THE "0 of 6" MEASURE ABOVE — WHY IT'S HARDCODED
+--------------------------------------------------------------------------------
+Claims Confirmed is intentionally a static string, not a live DAX calculation.
+Chi-square tests of independence and Pearson correlations aren't native DAX
+aggregations, so the six verdicts on Page 5 come from the one-time Python
+statistical battery in scripts/verification_tests.py, not from a measure that
+recalculates on every data refresh. If this model is ever pointed at a new
+data extract, re-run verification_tests.py against it first, then update this
+string (and the Claim_Verification table content) by hand to match — don't
+assume the table will update itself.
+
+================================================================================
+NOTE ON THIS DATASET: In this particular export, every rate measure above
+returns ~50% regardless of how you slice it (see Section 3 of the analytical
+report / README). The "Is Rate Significantly Different" measure will show
+"No" for almost every category combination — that is the correct, honest
+result, not a bug in the DAX. Keep it in the model so the report self-checks
+if the underlying data is ever refreshed with a real production extract.
+================================================================================
