@@ -1,7 +1,0 @@
-Claim,Actual Result,Statistic,P Value,Verdict
-USSD shows 2.3x higher fraud rate than app,USSD 51.2% vs App 50.3%,χ²=7.06,0.13,Not confirmed
-Nigeria + Kenya drive 70% of fraud volume,Each country ~25% of volume,χ²=2.31,0.51,Not confirmed
-New accounts (<90d) show 3x higher fraud rate,51.2% vs 49.9% (oldest),trend test,0.65,Not confirmed
-Market traders have highest dispute rate,Ranked 10th of 15 segments,χ²=23.24,0.06,Not confirmed
-High velocity score correlates with fraud/reversal,r ~ 0.00 both,correlation,n/a,Not confirmed
-Month-end spikes in cash-out/reversal,Within sampling noise,χ²=2.13,0.14,Not confirmed
