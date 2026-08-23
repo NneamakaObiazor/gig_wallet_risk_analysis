@@ -16,7 +16,7 @@ sit at a uniform ~50% no matter how you slice the data.
 This repo documents that verification process end-to-end, rather than
 writing a report that assumes the brief's claims are true, and carries the
 same verdict into the live Power BI file itself so the report and dashboard
-never disagree. See [`report/Analytical_Report.docx`](report/Analytical_Report.docx)
+never disagree. See [`report/Analytical_Report.pdf`](report/Analytical_Report.pdf)
 for the full write-up, or [`scripts/verification_tests.py`](scripts/verification_tests.py)
 to reproduce the statistics yourself in under 10 seconds.
 
